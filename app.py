@@ -10,14 +10,14 @@ import json
 import os
 import re
 from datetime import datetime, timedelta, timezone
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_from_directory
 
 import gspread
 from google.oauth2.service_account import Credentials
 
 import config
 
-app = Flask(__name__, static_folder='static', template_folder='templates')
+app = Flask(__name__, static_folder='.', static_url_path='')
 
 SCOPES = [
     'https://www.googleapis.com/auth/spreadsheets',
@@ -72,7 +72,7 @@ def ensure_scheduled_tab(sh):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return send_from_directory('.', 'index.html')
 
 
 @app.route('/api/leaders', methods=['GET'])

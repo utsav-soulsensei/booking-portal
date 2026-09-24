@@ -7,11 +7,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="./style.css">
 </head>
 <body>
   <div class="app-container">
-    <!-- Navigation Bar -->
+    <!-- Header -->
     <header class="app-header">
       <div class="header-content">
         <div class="brand">
@@ -21,24 +21,28 @@
             <span class="brand-subtitle">Leader Appointment Portal</span>
           </div>
         </div>
-        <div id="user-badge" class="user-badge hidden">
-          <span class="leader-avatar" id="badge-avatar">L</span>
-          <div class="badge-details">
-            <span class="badge-name" id="badge-name">Leader Name</span>
-            <span class="badge-role">Verified Leader</span>
+        <div class="header-actions">
+          <button id="btn-open-settings" class="btn-icon-subtle" title="Configure Sheet Webhook">⚙️ Settings</button>
+          <div id="user-badge" class="user-badge hidden">
+            <span class="leader-avatar" id="badge-avatar">L</span>
+            <div class="badge-details">
+              <span class="badge-name" id="badge-name">Leader Name</span>
+              <span class="badge-role">Verified Leader</span>
+            </div>
+            <button id="btn-logout" class="btn-text">Sign Out</button>
           </div>
-          <button id="btn-logout" class="btn-text">Sign Out</button>
         </div>
       </div>
     </header>
 
+    <!-- Main Container -->
     <main class="main-content">
-      <!-- Section 1: Authentication View -->
+      <!-- Section 1: Sign In -->
       <section id="auth-section" class="card auth-card">
         <div class="card-header">
           <div class="icon-circle">🔐</div>
           <h2>Leader Sign In</h2>
-          <p class="subtitle">Select your name and enter your 4-digit PIN to manage today's learner appointments.</p>
+          <p class="subtitle">Select your name and enter your 4-digit PIN to manage learner appointments.</p>
         </div>
 
         <form id="login-form" class="form-body">
@@ -46,7 +50,7 @@
             <label for="leader-select">Select Leader Name</label>
             <div class="select-wrapper">
               <select id="leader-select" required>
-                <option value="" disabled selected>Loading active leaders...</option>
+                <option value="" disabled selected>Loading active leaders from Google Sheet...</option>
               </select>
             </div>
           </div>
@@ -71,7 +75,7 @@
         </form>
       </section>
 
-      <!-- Section 2: Scheduling View (Revealed after auth) -->
+      <!-- Section 2: Scheduling View (Visible upon sign-in) -->
       <section id="scheduling-section" class="hidden">
         <!-- Main Form Card -->
         <div class="card schedule-card">
@@ -79,9 +83,9 @@
             <div>
               <div class="badge-pill">1:1 Follow-up & Scheduling</div>
               <h2>Schedule Learner Appointment</h2>
-              <p class="subtitle">Select a learner from today's sessions and schedule their next appointment.</p>
+              <p class="subtitle">Select a learner from today's sessions and schedule their appointment.</p>
             </div>
-            <button id="btn-refresh-data" class="btn btn-secondary btn-sm" title="Refresh sheet data">
+            <button id="btn-refresh-data" class="btn btn-secondary btn-sm" title="Reload Sheet Data">
               🔄 Refresh List
             </button>
           </div>
@@ -114,7 +118,7 @@
                   <span class="info-value" id="info-user-id">-</span>
                 </div>
                 <div class="info-item">
-                  <span class="info-label">Session / Offering</span>
+                  <span class="info-label">Offering / Session</span>
                   <span class="info-value" id="info-ooo-name">-</span>
                 </div>
                 <div class="info-item">
@@ -129,14 +133,14 @@
               <div class="form-group flex-1">
                 <label for="appointment-date-time">Appointment Date & Time (IST)</label>
                 <input type="datetime-local" id="appointment-date-time" required>
-                <span class="form-hint">Specify when the new appointment will take place.</span>
+                <span class="form-hint">Select the appointment date and time.</span>
               </div>
             </div>
 
             <!-- Optional Notes -->
             <div class="form-group">
               <label for="appointment-notes">Session Notes / Instructions <span class="optional">(Optional)</span></label>
-              <textarea id="appointment-notes" rows="3" placeholder="Add any specific topics, agenda items, or learner requests..."></textarea>
+              <textarea id="appointment-notes" rows="3" placeholder="Add specific topics, focus areas, or learner requests..."></textarea>
             </div>
 
             <div id="schedule-feedback" class="alert hidden"></div>
@@ -155,9 +159,12 @@
           <div class="card-header flex-header">
             <div>
               <h3>Scheduled Appointments</h3>
-              <p class="subtitle">Appointments saved to the Google Sheet ('Scheduled Appointments' tab).</p>
+              <p class="subtitle">Saved to Google Sheet (tab: <strong>'Scheduled Appointments'</strong>).</p>
             </div>
-            <span id="appointment-count-badge" class="counter-badge">0 saved</span>
+            <div class="badge-group">
+              <span id="appointment-count-badge" class="counter-badge">0 saved</span>
+              <a href="https://docs.google.com/spreadsheets/d/1q-gadAgzT7Rim6p_3GvIPwTj_nznz_IkGrzLG3XP6NI/edit#gid=0" target="_blank" class="btn-link">Open Sheet ↗</a>
+            </div>
           </div>
 
           <div id="appointments-loading" class="loading-state hidden">
@@ -192,11 +199,45 @@
       </section>
     </main>
 
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Google Sheets Integration Settings</h3>
+          <button id="btn-close-settings" class="btn-close">✕</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-desc">This portal syncs with the <a href="https://docs.google.com/spreadsheets/d/1q-gadAgzT7Rim6p_3GvIPwTj_nznz_IkGrzLG3XP6NI/edit" target="_blank">Leader Pitch Sheet</a>.</p>
+          
+          <div class="form-group">
+            <label for="apps-script-url">Google Apps Script Webhook URL (Optional for Direct Writes)</label>
+            <input type="text" id="apps-script-url" placeholder="https://script.google.com/macros/s/.../exec">
+            <span class="form-hint">If deployed as a static site (GitHub Pages), provide your Apps Script Web App URL to write directly to Google Sheets.</span>
+          </div>
+
+          <div class="info-box">
+            <strong>📋 How to get an Apps Script URL in 1 minute:</strong>
+            <ol>
+              <li>Open the <a href="https://docs.google.com/spreadsheets/d/1q-gadAgzT7Rim6p_3GvIPwTj_nznz_IkGrzLG3XP6NI/edit" target="_blank">Google Sheet</a>.</li>
+              <li>Click <strong>Extensions > Apps Script</strong>.</li>
+              <li>Paste the code from <code>google-apps-script.js</code>.</li>
+              <li>Click <strong>Deploy > New deployment > Web app</strong> (Access: Anyone).</li>
+              <li>Paste the generated URL above.</li>
+            </ol>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="btn-save-settings" class="btn btn-primary">Save Settings</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
     <footer class="app-footer">
-      <p>SoulSensei Internal Operations • Synced live with Google Sheets</p>
+      <p>SoulSensei Internal Operations • Live synchronization with <a href="https://docs.google.com/spreadsheets/d/1q-gadAgzT7Rim6p_3GvIPwTj_nznz_IkGrzLG3XP6NI/edit#gid=0" target="_blank">Leader Pitch Sheet</a></p>
     </footer>
   </div>
 
-  <script src="/static/js/app.js"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
