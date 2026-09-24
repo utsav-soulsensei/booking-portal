@@ -19,6 +19,17 @@ import config
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
+
+@app.route('/api/<path:path>', methods=['OPTIONS'])
+def options_handler(path):
+    return ('', 204)
+
 SCOPES = [
     'https://www.googleapis.com/auth/spreadsheets',
     'https://www.googleapis.com/auth/drive',
@@ -183,12 +194,12 @@ def schedule_appointment():
     """Save scheduled appointment to the 'Scheduled Appointments' tab."""
     data = request.get_json() or {}
 
-    leader_name = str(data.get('leader_name', '')).strip()
-    user_id = str(data.get('user_id', '')).strip()
-    user_name = str(data.get('user_name', '')).strip()
-    oneonone_name = str(data.get('oneonone_name', '')).strip()
-    config_id = str(data.get('config_id', '')).strip()
-    scheduled_date_time = str(data.get('scheduled_date_time', '')).strip()
+    leader_name = str(data.get('leader_name') or data.get('leaderName') or '').strip()
+    user_id = str(data.get('user_id') or data.get('userId') or '').strip()
+    user_name = str(data.get('user_name') or data.get('userName') or '').strip()
+    oneonone_name = str(data.get('oneonone_name') or data.get('oneononeName') or '').strip()
+    config_id = str(data.get('config_id') or data.get('configId') or '').strip()
+    scheduled_date_time = str(data.get('scheduled_date_time') or data.get('scheduledDateTime') or data.get('appointmentDate') or '').strip()
     notes = str(data.get('notes', '')).strip()
 
     if not leader_name:

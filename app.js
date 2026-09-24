@@ -2,6 +2,7 @@
 const SPREADSHEET_ID = '1q-gadAgzT7Rim6p_3GvIPwTj_nznz_IkGrzLG3XP6NI';
 const GVIZ_SHEET1_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=Sheet1`;
 const GVIZ_SCHEDULED_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=Scheduled%20Appointments`;
+const DEFAULT_API_URL = 'https://weekends-gen-layout-veterinary.trycloudflare.com/api/schedule';
 
 document.addEventListener('DOMContentLoaded', () => {
   // State
@@ -330,54 +331,67 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     let savedRemote = false;
+    let errorMessage = '';
 
-    // A. Check if user configured an Apps Script Webhook URL
-    const webhookUrl = localStorage.getItem('SOULSENSEI_WEBHOOK_URL');
-    if (webhookUrl) {
-      try {
-        await fetch(webhookUrl, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
+    // Target API endpoint: custom webhook or default Cloudflare tunnel API
+    const targetUrl = localStorage.getItem('SOULSENSEI_WEBHOOK_URL') || DEFAULT_API_URL;
+
+    // 1. Try sending to target API endpoint
+    try {
+      const res = await fetch(targetUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
         savedRemote = true;
-      } catch (err) {
-        console.warn('Apps Script webhook error:', err);
+      } else {
+        errorMessage = data.error || `Server returned HTTP ${res.status}`;
       }
-    }
-
-    // B. Check if local backend API /api/schedule is available
-    if (!savedRemote) {
-      try {
-        const res = await fetch('/api/schedule', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        const resData = await res.json();
-        if (resData.success) {
-          savedRemote = true;
+    } catch (err) {
+      console.warn('Primary endpoint failed:', err);
+      // If primary failed, try local /api/schedule if running locally
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        try {
+          const res = await fetch('/api/schedule', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const data = await res.json();
+          if (res.ok && data.success) {
+            savedRemote = true;
+          }
+        } catch (e2) {
+          errorMessage = err.message;
         }
-      } catch (e) {
-        // Static mode without server
+      } else {
+        errorMessage = err.message;
       }
     }
-
-    // C. Always save in localStorage so it persists locally
-    saveToLocalStorage(payload);
 
     setLoading(btnSubmit, false, 'Confirm & Save Appointment');
-    showSuccess(
-      scheduleFeedback,
-      `✅ Appointment for ${selectedUser.user_name} scheduled for ${formattedDt}! Saved to 'Scheduled Appointments'.`
-    );
 
-    appointmentDateTime.value = '';
-    appointmentNotes.value = '';
-
-    // Refresh table
-    loadAppointments();
+    if (savedRemote) {
+      // Save local backup as well
+      saveToLocalStorage(payload);
+      showSuccess(
+        scheduleFeedback,
+        `✅ Appointment for ${selectedUser.user_name} scheduled for ${formattedDt}! Successfully saved to Google Sheet ('Scheduled Appointments').`
+      );
+      appointmentDateTime.value = '';
+      appointmentNotes.value = '';
+      // Refresh table to reflect newly saved row from Google Sheet
+      setTimeout(() => loadAppointments(), 1200);
+    } else {
+      // Save local copy so user doesn't lose their data
+      saveToLocalStorage({ ...payload, sync_status: 'Unsynced' });
+      showError(
+        scheduleFeedback,
+        `❌ Could not save to Google Sheet: ${errorMessage || 'Network error'}. Your entry was backed up locally. Please try again or check the API settings.`
+      );
+    }
   });
 
   // Local storage cache helper
