@@ -3,7 +3,7 @@ const SPREADSHEET_ID = '1q-gadAgzT7Rim6p_3GvIPwTj_nznz_IkGrzLG3XP6NI';
 const GVIZ_SHEET1_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=Sheet1`;
 const GVIZ_SCHEDULED_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=Scheduled%20Appointments`;
 // Google Apps Script Webhook URL (Runs serverless inside Google Sheets)
-const APPS_SCRIPT_URL = '';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxGbYIB1XBg8Y-N7nvx7yKLh_BDFIhbxYxcAHiJcT55J3_WyQjIyFl4yAaNKH2fn_q8Uw/exec';
 
 document.addEventListener('DOMContentLoaded', () => {
   // State
@@ -317,7 +317,8 @@ document.addEventListener('DOMContentLoaded', () => {
         await fetch(webhookUrl, {
           method: 'POST',
           mode: 'no-cors',
-          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-cache',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify(payload)
         });
         savedRemote = true;
