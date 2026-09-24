@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SoulSensei • Leader Appointment Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Navigation Bar -->
+    <header class="app-header">
+      <div class="header-content">
+        <div class="brand">
+          <div class="brand-logo">🧘</div>
+          <div class="brand-text">
+            <span class="brand-title">SoulSensei</span>
+            <span class="brand-subtitle">Leader Appointment Portal</span>
+          </div>
+        </div>
+        <div id="user-badge" class="user-badge hidden">
+          <span class="leader-avatar" id="badge-avatar">L</span>
+          <div class="badge-details">
+            <span class="badge-name" id="badge-name">Leader Name</span>
+            <span class="badge-role">Verified Leader</span>
+          </div>
+          <button id="btn-logout" class="btn-text">Sign Out</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <!-- Section 1: Authentication View -->
+      <section id="auth-section" class="card auth-card">
+        <div class="card-header">
+          <div class="icon-circle">🔐</div>
+          <h2>Leader Sign In</h2>
+          <p class="subtitle">Select your name and enter your 4-digit PIN to manage today's learner appointments.</p>
+        </div>
+
+        <form id="login-form" class="form-body">
+          <div class="form-group">
+            <label for="leader-select">Select Leader Name</label>
+            <div class="select-wrapper">
+              <select id="leader-select" required>
+                <option value="" disabled selected>Loading active leaders...</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <div class="label-row">
+              <label for="leader-password">Password / PIN</label>
+              <span class="helper-badge" title="Last 4 digits of your registered phone number or 8888">💡 Last 4 digits of phone (or 8888)</span>
+            </div>
+            <div class="password-wrapper">
+              <input type="password" id="leader-password" placeholder="Enter 4-digit PIN" required maxlength="10" autocomplete="current-password">
+              <button type="button" id="toggle-password" class="btn-icon" aria-label="Toggle password visibility">👁️</button>
+            </div>
+          </div>
+
+          <div id="auth-error" class="alert alert-error hidden"></div>
+
+          <button type="submit" id="btn-login" class="btn btn-primary btn-block">
+            <span class="btn-text-content">Access Portal</span>
+            <span class="spinner hidden"></span>
+          </button>
+        </form>
+      </section>
+
+      <!-- Section 2: Scheduling View (Revealed after auth) -->
+      <section id="scheduling-section" class="hidden">
+        <!-- Main Form Card -->
+        <div class="card schedule-card">
+          <div class="card-header flex-header">
+            <div>
+              <div class="badge-pill">1:1 Follow-up & Scheduling</div>
+              <h2>Schedule Learner Appointment</h2>
+              <p class="subtitle">Select a learner from today's sessions and schedule their next appointment.</p>
+            </div>
+            <button id="btn-refresh-data" class="btn btn-secondary btn-sm" title="Refresh sheet data">
+              🔄 Refresh List
+            </button>
+          </div>
+
+          <form id="schedule-form" class="form-body">
+            <!-- Learner Dropdown -->
+            <div class="form-group">
+              <label for="user-select">Select Learner</label>
+              <div class="select-wrapper">
+                <select id="user-select" required>
+                  <option value="" disabled selected>Choose a learner...</option>
+                </select>
+              </div>
+              <span class="form-hint">Showing learners who have sessions with you on today's schedule.</span>
+            </div>
+
+            <!-- Learner Details Card -->
+            <div id="user-info-card" class="info-card hidden">
+              <div class="info-card-header">
+                <span class="info-title">Learner Details</span>
+                <span class="tag-status" id="info-config-tag">Config #---</span>
+              </div>
+              <div class="info-grid">
+                <div class="info-item">
+                  <span class="info-label">Learner Name</span>
+                  <span class="info-value" id="info-user-name">-</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Learner User ID</span>
+                  <span class="info-value" id="info-user-id">-</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Session / Offering</span>
+                  <span class="info-value" id="info-ooo-name">-</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Original Session (IST)</span>
+                  <span class="info-value" id="info-session-time">-</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Date and Time Picker -->
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="appointment-date-time">Appointment Date & Time (IST)</label>
+                <input type="datetime-local" id="appointment-date-time" required>
+                <span class="form-hint">Specify when the new appointment will take place.</span>
+              </div>
+            </div>
+
+            <!-- Optional Notes -->
+            <div class="form-group">
+              <label for="appointment-notes">Session Notes / Instructions <span class="optional">(Optional)</span></label>
+              <textarea id="appointment-notes" rows="3" placeholder="Add any specific topics, agenda items, or learner requests..."></textarea>
+            </div>
+
+            <div id="schedule-feedback" class="alert hidden"></div>
+
+            <div class="form-actions">
+              <button type="submit" id="btn-submit-appointment" class="btn btn-primary btn-lg">
+                <span class="btn-text-content">Confirm & Save Appointment</span>
+                <span class="spinner hidden"></span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Section 3: Scheduled Appointments List -->
+        <div class="card appointments-card">
+          <div class="card-header flex-header">
+            <div>
+              <h3>Scheduled Appointments</h3>
+              <p class="subtitle">Appointments saved to the Google Sheet ('Scheduled Appointments' tab).</p>
+            </div>
+            <span id="appointment-count-badge" class="counter-badge">0 saved</span>
+          </div>
+
+          <div id="appointments-loading" class="loading-state hidden">
+            <span class="spinner-large"></span>
+            <p>Loading scheduled appointments...</p>
+          </div>
+
+          <div id="appointments-empty" class="empty-state">
+            <div class="empty-icon">📅</div>
+            <p>No appointments recorded for you yet today.</p>
+            <span class="empty-sub">Use the form above to schedule appointments.</span>
+          </div>
+
+          <div id="appointments-list-container" class="table-wrapper hidden">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Learner Name</th>
+                  <th>User ID</th>
+                  <th>Offering</th>
+                  <th>Scheduled Date & Time</th>
+                  <th>Notes</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="appointments-tbody">
+                <!-- Rows injected dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <p>SoulSensei Internal Operations • Synced live with Google Sheets</p>
+    </footer>
+  </div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
