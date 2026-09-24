@@ -1,21 +1,23 @@
 /**
  * SoulSensei Leader Appointment Portal - Google Apps Script Webhook
  * 
- * Instructions to enable direct Google Sheets write from GitHub Pages:
- * 1. Open your Google Sheet: https://docs.google.com/spreadsheets/d/1q-gadAgzT7Rim6p_3GvIPwTj_nznz_IkGrzLG3XP6NI/edit
- * 2. In the top menu, go to: Extensions > Apps Script
- * 3. Replace all existing text in the editor with this script.
- * 4. Click 'Deploy' (top right blue button) > 'New deployment'.
- * 5. Select type: 'Web app' (click gear icon next to 'Select type').
- * 6. Set Description: "SoulSensei Booking Webhook"
- * 7. Set 'Execute as': "Me"
- * 8. Set 'Who has access': "Anyone" (important for web form submissions)
- * 9. Click 'Deploy', authorize permissions when prompted.
- * 10. Copy the Web App URL (starts with https://script.google.com/macros/s/...)
- * 11. Open the portal UI (https://utsav-soulsensei.github.io/booking-portal/), click ⚙️ Settings, and paste the URL.
+ * This script runs 100% inside Google Sheets (no external server or tunnel required).
+ * 
+ * Instructions:
+ * 1. Open the Google Sheet:
+ *    https://docs.google.com/spreadsheets/d/1q-gadAgzT7Rim6p_3GvIPwTj_nznz_IkGrzLG3XP6NI/edit
+ * 2. In the top menu, click: Extensions > Apps Script
+ * 3. Replace any code in the editor with this file's contents.
+ * 4. Click 'Deploy' (top right) > 'New deployment'.
+ * 5. Click the gear icon next to 'Select type' and choose 'Web app'.
+ * 6. Set:
+ *    - Execute as: "Me"
+ *    - Who has access: "Anyone" (crucial for web submissions from GitHub Pages)
+ * 7. Click 'Deploy', authorize permissions when asked.
+ * 8. Copy the Web App URL (e.g. https://script.google.com/macros/s/AKfycb.../exec)
  */
 
-function doPost(e) {
+function recordAppointment(data) {
   var lock = LockService.getScriptLock();
   lock.tryLock(10000);
   
@@ -23,7 +25,6 @@ function doPost(e) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName('Scheduled Appointments');
     
-    // Create tab if missing
     if (!sheet) {
       sheet = ss.insertSheet('Scheduled Appointments');
       sheet.appendRow([
@@ -39,23 +40,16 @@ function doPost(e) {
       ]);
     }
     
-    var data;
-    try {
-      data = JSON.parse(e.postData.contents);
-    } catch (parseErr) {
-      data = e.parameter;
-    }
-    
     var nowFormatted = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd HH:mm:ss");
     
     sheet.appendRow([
       nowFormatted,
-      data.leader_name || '',
-      data.oneonone_name || '',
-      data.config_id || '',
-      data.user_id || '',
-      data.user_name || '',
-      data.scheduled_date_time || '',
+      data.leader_name || data.leaderName || '',
+      data.oneonone_name || data.oneononeName || '',
+      data.config_id || data.configId || '',
+      data.user_id || data.userId || '',
+      data.user_name || data.userName || '',
+      data.scheduled_date_time || data.scheduledDateTime || data.appointmentDate || '',
       data.notes || '',
       'Scheduled'
     ]);
@@ -75,7 +69,25 @@ function doPost(e) {
   }
 }
 
+function doPost(e) {
+  var data = {};
+  if (e && e.postData && e.postData.contents) {
+    try {
+      data = JSON.parse(e.postData.contents);
+    } catch (parseErr) {
+      data = e.parameter || {};
+    }
+  } else if (e && e.parameter) {
+    data = e.parameter;
+  }
+  return recordAppointment(data);
+}
+
 function doGet(e) {
+  var p = (e && e.parameter) ? e.parameter : {};
+  if (p.leader_name || p.leaderName) {
+    return recordAppointment(p);
+  }
   return ContentService.createTextOutput(JSON.stringify({
     status: 'online',
     sheet: 'Scheduled Appointments'

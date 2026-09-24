@@ -2,7 +2,8 @@
 const SPREADSHEET_ID = '1q-gadAgzT7Rim6p_3GvIPwTj_nznz_IkGrzLG3XP6NI';
 const GVIZ_SHEET1_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=Sheet1`;
 const GVIZ_SCHEDULED_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=Scheduled%20Appointments`;
-const DEFAULT_API_URL = 'https://weekends-gen-layout-veterinary.trycloudflare.com/api/schedule';
+// Google Apps Script Webhook URL (Runs serverless inside Google Sheets)
+const APPS_SCRIPT_URL = '';
 
 document.addEventListener('DOMContentLoaded', () => {
   // State
@@ -309,63 +310,47 @@ document.addEventListener('DOMContentLoaded', () => {
     let savedRemote = false;
     let errorMessage = '';
 
-    // Target API endpoint: custom webhook or default Cloudflare tunnel API
-    const targetUrl = localStorage.getItem('SOULSENSEI_WEBHOOK_URL') || DEFAULT_API_URL;
+    const webhookUrl = APPS_SCRIPT_URL || localStorage.getItem('SOULSENSEI_WEBHOOK_URL');
 
-    // 1. Try sending to target API endpoint
-    try {
-      const res = await fetch(targetUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
+    if (webhookUrl) {
+      try {
+        await fetch(webhookUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
         savedRemote = true;
-      } else {
-        errorMessage = data.error || `Server returned HTTP ${res.status}`;
-      }
-    } catch (err) {
-      console.warn('Primary endpoint failed:', err);
-      // If primary failed, try local /api/schedule if running locally
-      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      } catch (err) {
+        console.warn('Apps Script POST error, trying GET fallback:', err);
         try {
-          const res = await fetch('/api/schedule', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          const data = await res.json();
-          if (res.ok && data.success) {
-            savedRemote = true;
-          }
+          const params = new URLSearchParams(payload).toString();
+          await fetch(`${webhookUrl}?${params}`, { mode: 'no-cors' });
+          savedRemote = true;
         } catch (e2) {
-          errorMessage = err.message;
+          errorMessage = e2.message;
         }
-      } else {
-        errorMessage = err.message;
       }
+    } else {
+      errorMessage = 'Google Apps Script Webhook is not configured yet.';
     }
 
     setLoading(btnSubmit, false, 'Confirm & Save Appointment');
 
     if (savedRemote) {
-      // Save local backup as well
       saveToLocalStorage(payload);
       showSuccess(
         scheduleFeedback,
-        `✅ Appointment for ${selectedUser.user_name} scheduled for ${formattedDt}! Successfully saved to Google Sheet ('Scheduled Appointments').`
+        `✅ Appointment for ${selectedUser.user_name} scheduled for ${formattedDt}!`
       );
       appointmentDateTime.value = '';
       appointmentNotes.value = '';
-      // Refresh table to reflect newly saved row from Google Sheet
-      setTimeout(() => loadAppointments(), 1200);
+      setTimeout(() => loadAppointments(), 1500);
     } else {
-      // Save local copy so user doesn't lose their data
       saveToLocalStorage({ ...payload, sync_status: 'Unsynced' });
       showError(
         scheduleFeedback,
-        `❌ Could not save to Google Sheet: ${errorMessage || 'Network error'}. Your entry was backed up locally. Please try again or check the API settings.`
+        `⚠️ ${errorMessage} Your entry was saved locally in the browser.`
       );
     }
   });
