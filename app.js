@@ -272,9 +272,10 @@ document.addEventListener('DOMContentLoaded', () => {
     leaderUsers.forEach((u, idx) => {
       const opt = document.createElement('option');
       opt.value = idx;
-      const svc = u.oneonone_name ? ` (${u.oneonone_name})` : '';
-      const uid = u.user_id ? ` • ID: ${u.user_id}` : '';
-      opt.textContent = `${u.user_name}${svc}${uid}`;
+      const timeStr = u.session_time ? ` [${u.session_time}]` : '';
+      const svc = u.oneonone_name ? ` • ${u.oneonone_name}` : '';
+      const uid = u.user_id ? ` (ID: ${u.user_id})` : '';
+      opt.textContent = `${u.user_name || 'User'}${timeStr}${svc}${uid}`;
       userSelect.appendChild(opt);
     });
   }
