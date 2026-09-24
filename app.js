@@ -49,33 +49,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const appointmentsContainer = document.getElementById('appointments-list-container');
   const appointmentsTbody = document.getElementById('appointments-tbody');
 
-  // Settings Modal
-  const btnOpenSettings = document.getElementById('btn-open-settings');
-  const btnCloseSettings = document.getElementById('btn-close-settings');
-  const settingsModal = document.getElementById('settings-modal');
-  const appsScriptUrlInput = document.getElementById('apps-script-url');
-  const btnSaveSettings = document.getElementById('btn-save-settings');
-
-  // Load saved settings
-  const savedWebhook = localStorage.getItem('SOULSENSEI_WEBHOOK_URL') || '';
-  appsScriptUrlInput.value = savedWebhook;
-
   // Initialize
   initMinDateTime();
   loadSheetData();
-
-  // Settings modal listeners
-  btnOpenSettings.addEventListener('click', () => settingsModal.classList.remove('hidden'));
-  btnCloseSettings.addEventListener('click', () => settingsModal.classList.add('hidden'));
-  settingsModal.addEventListener('click', (e) => {
-    if (e.target === settingsModal) settingsModal.classList.add('hidden');
-  });
-  btnSaveSettings.addEventListener('click', () => {
-    const url = appsScriptUrlInput.value.trim();
-    localStorage.setItem('SOULSENSEI_WEBHOOK_URL', url);
-    settingsModal.classList.add('hidden');
-    alert('Settings saved!');
-  });
 
   // Password visibility toggle
   togglePassword.addEventListener('click', () => {
