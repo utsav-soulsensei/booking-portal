@@ -72,6 +72,53 @@ document.addEventListener('DOMContentLoaded', () => {
     appointmentDateTime.min = `${year}-${month}-${day}T${hours}:${mins}`;
   }
 
+  // --- Helpers for GViz Parsing & Date Normalization ---
+  function getGvizValue(cell) {
+    if (!cell) return '';
+    if (cell.f !== undefined && cell.f !== null) {
+      return String(cell.f).trim();
+    }
+    if (cell.v !== undefined && cell.v !== null) {
+      const vStr = String(cell.v).trim();
+      const dateMatch = vStr.match(/^Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+)(?:,(\d+))?)?\)$/);
+      if (dateMatch) {
+        const year = dateMatch[1];
+        const month = String(parseInt(dateMatch[2], 10) + 1).padStart(2, '0');
+        const day = String(parseInt(dateMatch[3], 10)).padStart(2, '0');
+        const hour = dateMatch[4] !== undefined ? String(parseInt(dateMatch[4], 10)).padStart(2, '0') : '00';
+        const min = dateMatch[5] !== undefined ? String(parseInt(dateMatch[5], 10)).padStart(2, '0') : '00';
+        return `${year}-${month}-${day} ${hour}:${min}`;
+      }
+      return vStr;
+    }
+    return '';
+  }
+
+  function normalizeDateTime(dtStr) {
+    if (!dtStr) return '';
+    const str = String(dtStr).trim();
+    const dateMatch = str.match(/^Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+)(?:,(\d+))?)?\)$/);
+    if (dateMatch) {
+      const year = dateMatch[1];
+      const month = String(parseInt(dateMatch[2], 10) + 1).padStart(2, '0');
+      const day = String(parseInt(dateMatch[3], 10)).padStart(2, '0');
+      const hour = dateMatch[4] !== undefined ? String(parseInt(dateMatch[4], 10)).padStart(2, '0') : '00';
+      const min = dateMatch[5] !== undefined ? String(parseInt(dateMatch[5], 10)).padStart(2, '0') : '00';
+      return `${year}-${month}-${day} ${hour}:${min}`;
+    }
+    const cleaned = str.replace('T', ' ');
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(cleaned)) {
+      return cleaned.substring(0, 16);
+    }
+    return cleaned;
+  }
+
+  function getAppointmentKey(app) {
+    const uid = String(app.user_id || app.user_name || '').trim().toLowerCase();
+    const dt = normalizeDateTime(app.scheduled_date_time);
+    return `${uid}_${dt}`;
+  }
+
   // --- 1. Fetch Sheet 1 Data via Google Visualization API ---
   async function loadSheetData() {
     leaderSelect.innerHTML = '<option value="" disabled selected>Loading active leaders from Google Sheet...</option>';
@@ -92,22 +139,17 @@ document.addEventListener('DOMContentLoaded', () => {
       const colPwd = cols.indexOf('Leader Password') !== -1 ? cols.indexOf('Leader Password') : 6;
 
       sheetRows = gvizData.table.rows.map(r => {
-        const getVal = (idx) => {
-          if (!r.c || !r.c[idx]) return '';
-          const val = r.c[idx].v;
-          return val !== null && val !== undefined ? String(val) : '';
-        };
-
+        if (!r.c) return null;
         return {
-          leader_name: getVal(colLeader).trim(),
-          oneonone_name: getVal(colOoo).trim(),
-          config_id: getVal(colCfg).trim(),
-          user_id: getVal(colUid).trim(),
-          user_name: getVal(colUname).trim(),
-          session_time: getVal(colTime).trim(),
-          password: getVal(colPwd).trim()
+          leader_name: getGvizValue(r.c[colLeader]),
+          oneonone_name: getGvizValue(r.c[colOoo]),
+          config_id: getGvizValue(r.c[colCfg]),
+          user_id: getGvizValue(r.c[colUid]),
+          user_name: getGvizValue(r.c[colUname]),
+          session_time: getGvizValue(r.c[colTime]),
+          password: getGvizValue(r.c[colPwd])
         };
-      }).filter(r => r.leader_name);
+      }).filter(r => r && r.leader_name);
 
       // Populate leader dropdown
       const leaders = Array.from(new Set(sheetRows.map(r => r.leader_name))).sort();
@@ -276,8 +318,11 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- 4. Schedule Appointment Submission ---
+  let isSubmitting = false;
+
   scheduleForm.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
     hideAlert(scheduleFeedback);
 
     const userIdx = parseInt(userSelect.value, 10);
@@ -295,6 +340,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const formattedDt = dtVal.replace('T', ' ');
+    isSubmitting = true;
     setLoading(btnSubmit, true, 'Saving appointment...');
 
     const payload = {
@@ -312,59 +358,68 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const webhookUrl = APPS_SCRIPT_URL || localStorage.getItem('SOULSENSEI_WEBHOOK_URL');
 
-    if (webhookUrl) {
-      try {
-        await fetch(webhookUrl, {
-          method: 'POST',
-          mode: 'no-cors',
-          cache: 'no-cache',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(payload)
-        });
-        savedRemote = true;
-      } catch (err) {
-        console.warn('Apps Script POST error, trying GET fallback:', err);
+    try {
+      if (webhookUrl) {
         try {
-          const params = new URLSearchParams(payload).toString();
-          await fetch(`${webhookUrl}?${params}`, { mode: 'no-cors' });
+          await fetch(webhookUrl, {
+            method: 'POST',
+            mode: 'no-cors',
+            cache: 'no-cache',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload)
+          });
           savedRemote = true;
-        } catch (e2) {
-          errorMessage = e2.message;
+        } catch (err) {
+          console.warn('Apps Script POST error, trying GET fallback:', err);
+          try {
+            const params = new URLSearchParams(payload).toString();
+            await fetch(`${webhookUrl}?${params}`, { mode: 'no-cors' });
+            savedRemote = true;
+          } catch (e2) {
+            errorMessage = e2.message;
+          }
         }
+      } else {
+        errorMessage = 'Google Apps Script Webhook is not configured yet.';
       }
-    } else {
-      errorMessage = 'Google Apps Script Webhook is not configured yet.';
-    }
 
-    setLoading(btnSubmit, false, 'Confirm & Save Appointment');
-
-    if (savedRemote) {
-      saveToLocalStorage(payload);
-      showSuccess(
-        scheduleFeedback,
-        `✅ Appointment for ${selectedUser.user_name} scheduled for ${formattedDt}!`
-      );
-      appointmentDateTime.value = '';
-      appointmentNotes.value = '';
-      setTimeout(() => loadAppointments(), 1500);
-    } else {
-      saveToLocalStorage({ ...payload, sync_status: 'Unsynced' });
-      showError(
-        scheduleFeedback,
-        `⚠️ ${errorMessage} Your entry was saved locally in the browser.`
-      );
+      if (savedRemote) {
+        saveToLocalStorage(payload);
+        showSuccess(
+          scheduleFeedback,
+          `✅ Appointment for ${selectedUser.user_name} scheduled for ${formattedDt}!`
+        );
+        appointmentDateTime.value = '';
+        appointmentNotes.value = '';
+        loadAppointments();
+        setTimeout(() => loadAppointments(), 3000);
+      } else {
+        saveToLocalStorage({ ...payload, sync_status: 'Unsynced' });
+        showError(
+          scheduleFeedback,
+          `⚠️ ${errorMessage} Your entry was saved locally in the browser.`
+        );
+        loadAppointments();
+      }
+    } finally {
+      isSubmitting = false;
+      setLoading(btnSubmit, false, 'Confirm & Save Appointment');
     }
   });
 
   // Local storage cache helper
   function saveToLocalStorage(appointment) {
     const list = JSON.parse(localStorage.getItem('SOULSENSEI_LOCAL_APPOINTMENTS') || '[]');
-    list.unshift({
+    const newEntry = {
       ...appointment,
+      scheduled_date_time: normalizeDateTime(appointment.scheduled_date_time),
       Timestamp: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
-      Status: 'Scheduled'
-    });
-    localStorage.setItem('SOULSENSEI_LOCAL_APPOINTMENTS', JSON.stringify(list));
+      status: appointment.status || 'Scheduled'
+    };
+    const newKey = getAppointmentKey(newEntry);
+    const filtered = list.filter(item => getAppointmentKey(item) !== newKey);
+    filtered.unshift(newEntry);
+    localStorage.setItem('SOULSENSEI_LOCAL_APPOINTMENTS', JSON.stringify(filtered));
   }
 
   // --- 5. Load Scheduled Appointments ---
@@ -386,24 +441,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (gvizData.table && gvizData.table.rows) {
         const rows = gvizData.table.rows;
-        // Parse rows
+        const cols = (gvizData.table.cols || []).map(c => (c.label || c.id || '').trim());
+        const colLeader = cols.indexOf('Leader Name') !== -1 ? cols.indexOf('Leader Name') : 1;
+        const colOoo = cols.indexOf('One on One Name') !== -1 ? cols.indexOf('One on One Name') : 2;
+        const colCfg = cols.indexOf('One on One Config ID') !== -1 ? cols.indexOf('One on One Config ID') : 3;
+        const colUid = cols.indexOf('User ID') !== -1 ? cols.indexOf('User ID') : 4;
+        const colUname = cols.indexOf('User Name') !== -1 ? cols.indexOf('User Name') : 5;
+        const colTime = cols.indexOf('Scheduled Date and Time') !== -1 ? cols.indexOf('Scheduled Date and Time') : 6;
+        const colNotes = cols.indexOf('Notes') !== -1 ? cols.indexOf('Notes') : 7;
+        const colStatus = cols.indexOf('Status') !== -1 ? cols.indexOf('Status') : 8;
+
         rows.forEach(r => {
           if (!r.c) return;
-          const vals = r.c.map(c => c ? String(c.v || '') : '');
-          // Header check
-          if (vals[0] === 'Timestamp' || vals[1] === 'Leader Name') return;
+          const leader = getGvizValue(r.c[colLeader]);
+          if (leader === 'Leader Name' || !leader) return;
 
-          const leader = vals[1] || '';
           if (leader.toLowerCase() === currentLeader.toLowerCase()) {
             allAppointments.push({
               leader_name: leader,
-              oneonone_name: vals[2] || '',
-              config_id: vals[3] || '',
-              user_id: vals[4] || '',
-              user_name: vals[5] || '',
-              scheduled_date_time: vals[6] || '',
-              notes: vals[7] || '',
-              status: vals[8] || 'Scheduled'
+              oneonone_name: getGvizValue(r.c[colOoo]),
+              config_id: getGvizValue(r.c[colCfg]),
+              user_id: getGvizValue(r.c[colUid]),
+              user_name: getGvizValue(r.c[colUname]),
+              scheduled_date_time: normalizeDateTime(getGvizValue(r.c[colTime])),
+              notes: getGvizValue(r.c[colNotes]),
+              status: getGvizValue(r.c[colStatus]) || 'Scheduled'
             });
           }
         });
@@ -416,17 +478,35 @@ document.addEventListener('DOMContentLoaded', () => {
     const local = JSON.parse(localStorage.getItem('SOULSENSEI_LOCAL_APPOINTMENTS') || '[]');
     const leaderLocal = local.filter(a => a.leader_name && a.leader_name.toLowerCase() === currentLeader.toLowerCase());
 
-    // Merge without duplicates (by user_id + scheduled_date_time)
+    // Merge: Google Sheets appointments are the source of truth
     const seen = new Set();
     const merged = [];
 
-    [...leaderLocal, ...allAppointments].forEach(a => {
-      const key = `${a.user_id}_${a.scheduled_date_time}`;
-      if (!seen.has(key)) {
+    allAppointments.forEach(a => {
+      const key = getAppointmentKey(a);
+      if (key && !seen.has(key)) {
         seen.add(key);
         merged.push(a);
       }
     });
+
+    // Add local storage appointments only if they are not yet synced to Google Sheets
+    const remainingLocal = [];
+    leaderLocal.forEach(a => {
+      const key = getAppointmentKey(a);
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        merged.push({
+          ...a,
+          scheduled_date_time: normalizeDateTime(a.scheduled_date_time)
+        });
+        remainingLocal.push(a);
+      }
+    });
+
+    // Clean up local storage so synced appointments do not linger
+    const otherLeaderLocal = local.filter(a => !a.leader_name || a.leader_name.toLowerCase() !== currentLeader.toLowerCase());
+    localStorage.setItem('SOULSENSEI_LOCAL_APPOINTMENTS', JSON.stringify([...remainingLocal, ...otherLeaderLocal]));
 
     appointmentsLoading.classList.add('hidden');
     appointmentsCountBadge.textContent = `${merged.length} saved`;
